@@ -326,6 +326,34 @@ export function TravelPlanningInterface() {
     setRecommendations(updatedPlan.recommendations || []);
   };
 
+  const handleCitySwitch = async (city: string) => {
+    if (city === preferences.destination) return;      // already selected
+    toast.info(`Loading itinerary for ${city}…`);
+    setIsProcessing(true);
+
+    try {
+      // Quick synchronous endpoint
+      const res = await fetch(`/api/quick-plan?city=${encodeURIComponent(city)}`);
+      if (!res.ok) throw new Error(await res.text());
+
+      const data = await res.json();
+
+      // update local state
+      setPreferences(prev => ({ ...prev, destination: city }));
+      setRecommendations(data.recommendations || []);
+      setItinerary(data.itinerary);
+      setWorkflowData(data.workflow_data);
+      setOrchestrationData(data.workflow_data?.orchestration ?? null);
+
+      toast.success(`Switched to ${city}`);
+    } catch (err:any) {
+      console.error(err);
+      toast.error('Failed to load new city', { description: err.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900">
       {/* Header */}
@@ -680,11 +708,13 @@ export function TravelPlanningInterface() {
                   </TabsList>
                   
                   <TabsContent value="itinerary">
-                    <ItineraryPreview 
+                    <ItineraryPreview
                       preferences={preferences}
                       recommendations={recommendations}
                       itinerary={itinerary}
                       workflowData={workflowData}
+                      /* THE ONLY NEW PROP ↓↓↓ */
+                      onSelectCity={handleCitySwitch}
                     />
                   </TabsContent>
                   
