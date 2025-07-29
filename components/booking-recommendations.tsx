@@ -119,35 +119,29 @@ export function BookingRecommendations({ destination, dates, travelers, budget, 
 
       const hotels = hotelsResponse.status === 'fulfilled' && hotelsResponse.value.ok 
         ? await hotelsResponse.value.json() 
-        : { data: [] };
+        : { results: [] };
       
       const restaurants = restaurantsResponse.status === 'fulfilled' && restaurantsResponse.value.ok 
         ? await restaurantsResponse.value.json() 
-        : { data: [] };
+        : { results: [] };
       
       const activities = activitiesResponse.status === 'fulfilled' && activitiesResponse.value.ok 
         ? await activitiesResponse.value.json() 
-        : { data: [] };
+        : { results: [] };
 
       const flights = flightsResponse.status === 'fulfilled' && flightsResponse.value.ok 
         ? await flightsResponse.value.json() 
-        : { data: [] };
-
-      // Debug logging
-      console.log('Hotels data:', hotels);
-      console.log('Restaurants data:', restaurants);
-      console.log('Activities data:', activities);
-      console.log('Flights data:', flights);
+        : { results: [] };
 
       // Fallback to generated flight options if API fails
-      const flightOptions = flights.data?.length > 0 
-        ? flights.data 
+      const flightOptions = flights.results?.length > 0 
+        ? flights.results 
         : generateFlightOptions(origin, destination, dates);
 
       setBookingData({
-        hotels: hotels.data || [],
-        restaurants: restaurants.data || [],
-        activities: activities.data || [],
+        hotels: hotels.results || [],
+        restaurants: restaurants.results || [],
+        activities: activities.results || [],
         flights: flightOptions,
         loading: false
       });
@@ -288,11 +282,11 @@ export function BookingRecommendations({ destination, dates, travelers, budget, 
                       
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold text-blue-600">{flight.price || flight.estimatedPrice}</p>
+                          <p className="font-semibold text-blue-600">{flight.estimatedPrice}</p>
                           <p className="text-xs text-gray-500">Estimated price range</p>
                         </div>
                         <Button asChild>
-                          <a href={flight.link || flight.bookingLink} target="_blank" rel="noopener noreferrer">
+                          <a href={flight.bookingLink} target="_blank" rel="noopener noreferrer">
                             Search Flights
                             <ExternalLink className="w-3 h-3 ml-1" />
                           </a>
