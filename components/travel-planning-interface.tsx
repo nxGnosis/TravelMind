@@ -47,6 +47,7 @@ import { BookingRecommendations } from '@/components/booking-recommendations';
 import { TravelHistory } from '@/components/travel-history';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { DestinationSelector } from '@/components/destination-selector';
+import { CacheKeyHelpers } from '@/lib/utils/cache-keys';
 
 interface TravelPreferences {
   destination: string;
@@ -731,7 +732,7 @@ export function TravelPlanningInterface() {
                   <TabsContent value="chat">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <ChatInterface
-                        planId={jobId || 'current'}
+                        planId={CacheKeyHelpers.generateTravelPlanKey(preferences)}
                         initialData={{
                           itinerary: itinerary,
                           recommendations: recommendations,

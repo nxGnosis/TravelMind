@@ -1,6 +1,6 @@
 // app/api/chat-with-plan/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { CacheManager, CACHE_KEYS } from '@/lib/redis';
+import { CacheManager, CACHE_KEYS, CacheKeyHelpers } from '@/lib/redis';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { applyPatch } from 'fast-json-patch';
 
@@ -21,7 +21,22 @@ export async function POST(req: NextRequest) {
     }
 
         // ── 1. Fetch (or seed) cached plan ────────────────────────────────────────────
-    const planKey = CACHE_KEYS.TRAVEL_PLAN(planId);
+    // Support both old format (planId) and new location-based keys
+    let planKey: string;
+    
+    if (planId.startsWith('travel_plan:')) {
+      // New format: already a complete cache key
+      planKey = planId;
+    } else if (planId === 'current' || planId.length < 20) {
+      // Old format: fallback to generic key (for backward compatibility)
+      planKey = CACHE_KEYS.TRAVEL_PLAN(planId);
+    } else {
+      // Assume it's a location-based key
+      planKey = planId;
+    }
+    
+    console.log(`[chat-with-plan] Using cache key: ${planKey}`);
+    
     let plan = await CacheManager.get<any>(planKey);
 
     if (!plan && currentPlan) {

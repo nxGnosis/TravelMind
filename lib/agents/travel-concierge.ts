@@ -19,6 +19,8 @@ export interface Activity {
   image?: string;
   description?: string;
   tips?: string[];
+  localCurrency?: string;
+  culturalNotes?: string;
 }
 
 export interface DaySchedule {
@@ -112,15 +114,14 @@ Day Themes (examples – feel free to add more):
 - Shopping & Entertainment
 - Relaxation & Wellness
 
-For each activity, provide:
-- Specific place name (not generic descriptions)
-- Exact address or area
-- Detailed description of what to expect
-- Practical tips and insider knowledge
-- Realistic costs and timing
-- Booking requirements
+FOR EACH ACTIVITY, INCLUDE:
+- **Tips**: Practical insider knowledge (e.g., "Ask for today's special", "Best time to visit is early morning", "Say 'anyeonghaseyo' as greeting", "Try the local delicacy")
+- **Exact Location**: Specific address, district, or landmark
+- **Local Currency Amount**: Prices in local currency (e.g., "₩15,000" for Seoul, "€25" for Paris, "¥3,000" for Tokyo)
+- **Cultural Context**: What makes this place special, local customs, or etiquette tips
+- **Booking Requirements**: Whether advance booking is needed
 
-Make each day feel like a completely different experience in ${city}.`;
+Make each activity feel like having a local tour guide providing insider knowledge and cultural context.`;
 
     try {
       const result = await this.model.generateContent({
@@ -149,9 +150,19 @@ Make each day feel like a completely different experience in ${city}.`;
                           type: { type: 'STRING' },
                           duration: { type: 'STRING' },
                           cost: { type: 'STRING' },
-                          location: { type: 'STRING' }
+                          location: { type: 'STRING' },
+                          specificPlace: { type: 'STRING' },
+                          address: { type: 'STRING' },
+                          description: { type: 'STRING' },
+                          tips: {
+                            type: 'ARRAY',
+                            items: { type: 'STRING' }
+                          },
+                          localCurrency: { type: 'STRING' },
+                          culturalNotes: { type: 'STRING' },
+                          bookingRequired: { type: 'BOOLEAN' }
                         },
-                        required: ['time', 'activity', 'type']
+                        required: ['time', 'activity', 'type', 'tips', 'localCurrency']
                       }
                     },
                     dailyBudget: { type: 'STRING' },

@@ -3,28 +3,65 @@ import { TavilySearchTool } from './tavily-search'
 
 export const fetchTopPlaces = async (
   city: string,
-  kind: 'hotel' | 'restaurant' | 'activity',
+  kind: 'hotel' | 'restaurant' | 'activity' | string,
   max = 5
 ) => {
   const tool = new TavilySearchTool()
   
-  // Enhanced queries for better booking information
-  const queries = {
-    hotel: `${city} best hotels booking.com agoda expedia 2025 luxury mid-range`,
-    restaurant: `${city} best restaurants opentable resy reservation 2025 michelin local`,
-    activity: `${city} top attractions tickets booking viator getyourguide 2025`
-  }
+  let query: string
   
-  const query = queries[kind] || `${city} ${kind} 2025`
+  // If kind is a predefined type, use enhanced queries
+  if (kind === 'hotel' || kind === 'restaurant' || kind === 'activity') {
+    const queries = {
+      hotel: `"${city}" hotels "book hotel" "hotel booking" site:booking.com OR site:agoda.com OR site:hotels.com OR site:expedia.com`,
+      restaurant: `"${city}" restaurants "restaurant reviews" "where to eat" site:tripadvisor.com OR site:yelp.com OR site:zomato.com`,
+      activity: `"${city}" attractions "things to do" "tourist attractions" site:tripadvisor.com OR site:viator.com OR site:getyourguide.com`
+    }
+    query = queries[kind]
+  } else {
+    // If kind is a custom query string, use it directly
+    query = kind
+  }
   const { results } = await tool.search(query, { max_results: max })
   
   return results.map(({ title, url, content }) => {
     // Extract useful information and create proper booking links
-    const name = title.replace(/^\d+\.\s*/, '').replace(/\s*-.*$/, '').trim()
+    let name = title.replace(/^\d+\.\s*/, '').replace(/\s*-.*$/, '').trim()
+    
+    // Clean up the name to remove common prefixes/suffixes
+    name = name
+      .replace(/^(Best|Top|#\d+)\s+/i, '')
+      .replace(/\s+(in|at|near)\s+.*/i, '')
+      .replace(/\s*\|\s*.*$/, '')
+      .replace(/\s*•.*$/, '')
+      .trim()
+    
+    // Extract location information from content
+    let location = city
+    const locationMatch = content.match(new RegExp(`(${city}[^.]*?)(?:\\.|,|\\n)`, 'i'))
+    if (locationMatch) {
+      location = locationMatch[1].trim()
+    }
+    
+    // Extract description/blurb from content
+    let blurb = content.substring(0, 150).replace(/\n/g, ' ').trim()
+    if (blurb.length > 147) {
+      blurb = blurb.substring(0, 147) + '...'
+    }
+    
+    // Determine the actual type from the query for booking URLs
+    let actualType = 'activity' // default
+    if (query.includes('hotel') || query.includes('accommodation') || query.includes('stay')) {
+      actualType = 'hotel'
+    } else if (query.includes('restaurant') || query.includes('dining') || query.includes('food') || query.includes('eat')) {
+      actualType = 'restaurant'
+    } else if (query.includes('flight') || query.includes('airline')) {
+      actualType = 'flight'
+    }
     
     // Create booking-friendly URLs based on the type
     let bookingUrl = url
-    if (kind === 'hotel') {
+    if (actualType === 'hotel') {
       if (url.includes('booking.com') || url.includes('agoda.com') || url.includes('expedia.com')) {
         bookingUrl = url
       } else {
@@ -32,14 +69,14 @@ export const fetchTopPlaces = async (
         const citySlug = city.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
         bookingUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(city)}&dest_type=city`
       }
-    } else if (kind === 'restaurant') {
+    } else if (actualType === 'restaurant') {
       if (url.includes('opentable.com') || url.includes('resy.com')) {
         bookingUrl = url
       } else {
         // Generate OpenTable search URL
         bookingUrl = `https://www.opentable.com/s?query=${encodeURIComponent(city)}`
       }
-    } else if (kind === 'activity') {
+    } else if (actualType === 'activity') {
       if (url.includes('viator.com') || url.includes('getyourguide.com') || url.includes('klook.com')) {
         bookingUrl = url
       } else {
@@ -49,8 +86,8 @@ export const fetchTopPlaces = async (
       }
     }
     
-    // Enhanced content processing
-    const blurb = content
+    // Use the blurb extracted above, or create a fallback
+    const finalBlurb = blurb || content
       .replace(/\d{4}-\d{2}-\d{2}.*?-/, '') // Remove dates
       .replace(/https?:\/\/[^\s]+/g, '') // Remove URLs
       .slice(0, 180)
@@ -59,9 +96,10 @@ export const fetchTopPlaces = async (
     return {
       name,
       link: bookingUrl,
-      blurb: blurb || `Top-rated ${kind} in ${city}. Click to view details and book.`,
-      category: kind,
-      city: city
+      blurb: finalBlurb || `Top-rated ${actualType} in ${city}. Click to view details and book.`,
+      category: actualType,
+      city,
+      location
     }
   })
 }
