@@ -82,30 +82,36 @@ export class TravelConcierge {
     budget: string
   ): Promise<TravelLogistics> {
     console.log(`✈️ Travel Concierge Agent: Creating diverse itinerary for ${city}`);
+    console.log(`📅 Date Range: startDate="${startDate}", endDate="${endDate}"`);
 
     const days = this.calculateDays(startDate, endDate);
+    console.log(`📊 Calculated days: ${days}`);
 
     const prompt = `
 As a Travel Concierge AI agent, create a comprehensive and DIVERSE travel logistics plan for ${city}:
 
 Trip Details:
 - Destination: ${city}
-- Dates: ${startDate} to ${endDate} (${days} days)
+- Dates: ${startDate} to ${endDate}
+- EXACT NUMBER OF DAYS: ${days} days (YOU MUST CREATE EXACTLY ${days} DAY ENTRIES IN THE SCHEDULE ARRAY)
 - Travelers: ${travelers}
 - Budget Range: ${budget}
 - Local Insights: ${JSON.stringify(insights)}
 
 CRITICAL REQUIREMENTS:
-1. Each day must have a UNIQUE theme and completely different activities
-2. Include SPECIFIC places with actual names, addresses, and descriptions
-3. Vary neighborhoods - explore different areas of ${city} each day
-4. Include diverse activity types: cultural, food, nature, shopping, entertainment
-5. Provide specific restaurant names, attraction names, and exact locations
-6. Include realistic timing and logical geographical routing
-7. Add specific tips and insider knowledge for each location
-8. NEVER truncate days – always cover the full ${days}-day span, creating new themes when templates run out.
+1. **YOU MUST GENERATE EXACTLY ${days} DAYS** - No more, no less. The schedule array must contain exactly ${days} entries.
+2. Each day must have a UNIQUE theme and completely different activities
+3. Include SPECIFIC places with actual names, addresses, and descriptions
+4. Vary neighborhoods - explore different areas of ${city} each day
+5. Include diverse activity types: cultural, food, nature, shopping, entertainment
+6. Provide specific restaurant names, attraction names, and exact locations
+7. Include realistic timing and logical geographical routing
+8. Add specific tips and insider knowledge for each location
+9. NEVER truncate days – always cover the full ${days}-day span, creating new themes when templates run out.
 
-Day Themes (examples – feel free to add more):
+MANDATORY: Generate a schedule array with EXACTLY ${days} entries, one for each day from Day 1 to Day ${days}.
+
+Day Themes (examples – feel free to add more for longer trips):
 - Historic & Cultural Exploration
 - Food & Market Discovery
 - Nature & Outdoor Adventures
@@ -113,6 +119,11 @@ Day Themes (examples – feel free to add more):
 - Local Neighborhoods & Hidden Gems
 - Shopping & Entertainment
 - Relaxation & Wellness
+- Day Trips & Excursions
+- Photography & Scenic Routes
+- Nightlife & Evening Entertainment
+- Adventure & Extreme Activities
+- Local Crafts & Workshops
 
 FOR EACH ACTIVITY, INCLUDE:
 - **Tips**: Practical insider knowledge (e.g., "Ask for today's special", "Best time to visit is early morning", "Say 'anyeonghaseyo' as greeting", "Try the local delicacy")
@@ -121,7 +132,9 @@ FOR EACH ACTIVITY, INCLUDE:
 - **Cultural Context**: What makes this place special, local customs, or etiquette tips
 - **Booking Requirements**: Whether advance booking is needed
 
-Make each activity feel like having a local tour guide providing insider knowledge and cultural context.`;
+Make each activity feel like having a local tour guide providing insider knowledge and cultural context.
+
+FINAL REMINDER: The schedule array MUST have exactly ${days} day entries, numbered Day 1 through Day ${days}.`;
 
     try {
       const result = await this.model.generateContent({
@@ -216,6 +229,14 @@ Make each activity feel like having a local tour guide providing insider knowled
       const response = await result.response;
       const itinerary = JSON.parse(response.text());
 
+      // Ensure we have exactly the right number of days
+      itinerary.schedule = this.ensureCorrectDays(
+        itinerary.schedule || [],
+        days,
+        city,
+        startDate
+      );
+
       // add calculations & bookings
       itinerary.calculations = this.generateCalculations(days, budget, travelers);
       itinerary.bookingInfo  = await this.generateBookingInfo(
@@ -227,6 +248,7 @@ Make each activity feel like having a local tour guide providing insider knowled
 
       console.log('✅ Travel Concierge Agent: Diverse itinerary complete', {
         days: itinerary.schedule?.length || 0,
+        expectedDays: days,
         totalBudget: itinerary.totalBudget?.amount,
         confidence: itinerary.confidence
       });
@@ -248,10 +270,31 @@ Make each activity feel like having a local tour guide providing insider knowled
   /* ───────────────────────── helpers ───────────────────────── */
 
   private calculateDays(startDate: string, endDate: string): number {
+    console.log(`🔢 calculateDays input: startDate="${startDate}", endDate="${endDate}"`);
+    
+    // Validate inputs
+    if (!startDate || !endDate) {
+      console.warn('⚠️ Missing dates, defaulting to 7 days');
+      return 7;
+    }
+    
     const start = new Date(startDate);
     const end   = new Date(endDate);
+    
+    // Check for invalid dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      console.warn('⚠️ Invalid date format, defaulting to 7 days');
+      return 7;
+    }
+    
     const diff  = Math.abs(end.valueOf() - start.valueOf());
-    return Math.max(1, Math.ceil(diff / 86_400_000)); // ms per day
+    const days = Math.max(1, Math.ceil(diff / 86_400_000)); // ms per day
+    
+    // Add +1 because we include both start and end day
+    const totalDays = days + 1;
+    console.log(`📊 Calculated: ${totalDays} days (including both start and end day)`);
+    
+    return totalDays;
   }
 
   private addDays(date: string, offset: number): string {
@@ -260,6 +303,61 @@ Make each activity feel like having a local tour guide providing insider knowled
     return d.toISOString().split('T')[0];
   }
 
+  /**
+   * Ensures the schedule has exactly the correct number of days.
+   * If AI returns fewer days, pad with generic activities.
+   * If AI returns more days, truncate.
+   */
+  private ensureCorrectDays(
+    schedule: DaySchedule[],
+    expectedDays: number,
+    city: string,
+    startDate: string
+  ): DaySchedule[] {
+    const currentDays = schedule.length;
+    
+    if (currentDays === expectedDays) {
+      console.log(`✓ Schedule has correct number of days: ${expectedDays}`);
+      return schedule;
+    }
+    
+    if (currentDays > expectedDays) {
+      console.log(`⚠️ Truncating schedule from ${currentDays} to ${expectedDays} days`);
+      return schedule.slice(0, expectedDays);
+    }
+    
+    // Need to add more days
+    console.log(`⚠️ Padding schedule from ${currentDays} to ${expectedDays} days`);
+    const themes = [
+      { title: `Exploring More of ${city}`, theme: 'Extended Discovery' },
+      { title: `${city} Hidden Gems`, theme: 'Local Secrets' },
+      { title: `Relaxed Day in ${city}`, theme: 'Leisure & Relaxation' },
+      { title: `${city} Adventure Day`, theme: 'Adventure' },
+      { title: `Cultural Deep Dive`, theme: 'Culture & Heritage' },
+      { title: `${city} Food Tour`, theme: 'Culinary Journey' },
+      { title: `Shopping & Souvenirs`, theme: 'Shopping' },
+      { title: `Nature Escape`, theme: 'Nature & Outdoors' },
+    ];
+    
+    for (let i = currentDays; i < expectedDays; i++) {
+      const themeIdx = i % themes.length;
+      const dayDate = this.addDays(startDate, i);
+      
+      schedule.push({
+        day: i + 1,
+        date: dayDate,
+        title: themes[themeIdx].title,
+        theme: themes[themeIdx].theme,
+        activities: this.buildGenericActivities(city, themes[themeIdx].theme),
+        dailyBudget: '$150',
+        neighborhoods: [],
+        highlights: [`Day ${i + 1} highlights`],
+        notes: [`Extended itinerary day ${i + 1}`]
+      });
+    }
+    
+    return schedule;
+  }
   private generateCalculations(days: number, budget: string, travelers: string) {
     const multiplier = budget === 'budget' ? 0.7 : budget === 'luxury' ? 1.5 : 1;
     const group      = travelers === '5+' ? 1.2 : 1;
