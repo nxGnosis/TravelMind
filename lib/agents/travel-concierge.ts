@@ -227,7 +227,23 @@ FINAL REMINDER: The schedule array MUST have exactly ${days} day entries, number
       });
 
       const response = await result.response;
-      const itinerary = JSON.parse(response.text());
+      const responseText = response.text();
+      
+      // Try to parse JSON, with recovery for truncated responses
+      let itinerary;
+      try {
+        itinerary = JSON.parse(responseText);
+      } catch (parseError) {
+        console.warn('⚠️ JSON parse failed, attempting recovery...', parseError);
+        // Try to fix common JSON issues
+        const fixedJson = this.attemptJsonRecovery(responseText);
+        if (fixedJson) {
+          itinerary = fixedJson;
+          console.log('✅ JSON recovery successful');
+        } else {
+          throw parseError; // Re-throw to fall back to mock
+        }
+      }
 
       // Ensure we have exactly the right number of days
       itinerary.schedule = this.ensureCorrectDays(
@@ -264,6 +280,46 @@ FINAL REMINDER: The schedule array MUST have exactly ${days} day entries, number
         budget,
         insights
       );
+    }
+  }
+
+  /**
+   * Attempt to recover from truncated or malformed JSON responses
+   */
+  private attemptJsonRecovery(text: string): any | null {
+    try {
+      // Remove any trailing incomplete content and try to close brackets
+      let fixed = text.trim();
+      
+      // Count open brackets
+      const openBraces = (fixed.match(/{/g) || []).length;
+      const closeBraces = (fixed.match(/}/g) || []).length;
+      const openBrackets = (fixed.match(/\[/g) || []).length;
+      const closeBrackets = (fixed.match(/]/g) || []).length;
+      
+      // If we're in the middle of a string, try to close it
+      if (fixed.includes('"') && !fixed.endsWith('"') && !fixed.endsWith('}') && !fixed.endsWith(']')) {
+        // Find the last complete structure
+        const lastCompleteObject = fixed.lastIndexOf('},');
+        const lastCompleteArray = fixed.lastIndexOf('],');
+        const lastComplete = Math.max(lastCompleteObject, lastCompleteArray);
+        
+        if (lastComplete > fixed.length * 0.7) { // Only if we have most of the content
+          fixed = fixed.substring(0, lastComplete + 1);
+        }
+      }
+      
+      // Add missing closing brackets
+      for (let i = 0; i < openBrackets - closeBrackets; i++) {
+        fixed += ']';
+      }
+      for (let i = 0; i < openBraces - closeBraces; i++) {
+        fixed += '}';
+      }
+      
+      return JSON.parse(fixed);
+    } catch {
+      return null;
     }
   }
 
@@ -547,6 +603,7 @@ FINAL REMINDER: The schedule array MUST have exactly ${days} day entries, number
     insights: any[]
   ): Promise<TravelLogistics> {
     const days         = this.calculateDays(startDate, endDate);
+    console.log(`🎯 Mock itinerary generating ${days} days for ${city}`);
     const bMult        = budget === 'budget' ? 0.7 : budget === 'luxury' ? 1.5 : 1;
     const dailyBudget  = Math.round(250 * bMult);
     const schedule     = this.generateCitySpecificItinerary(
@@ -556,6 +613,7 @@ FINAL REMINDER: The schedule array MUST have exactly ${days} day entries, number
       dailyBudget,
       insights
     );
+    console.log(`📅 Generated schedule with ${schedule.length} days`);
 
     return {
       schedule,
